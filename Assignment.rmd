@@ -1,0 +1,52 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "George Vu"
+date: "March 30, 2017"
+output: html_document
+bibliography: bib.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(caret)
+require(C50)
+```
+## Introduction
+In this article I am studying the HAR (Human Activity Recognition) data.  Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).  Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. [see @har2012]
+
+In their paper, the researchers decided to use a C4.5 decision tree with an AdaBoost method. The results were quite good at predicting the "classe"" variable.  In my research, I concluded that using a C5.0 decision tree model, which is a modified version of the C4.5 decision tree algorithm, I can get better predicitons on the training data than what the researchers were able to predict.  Since C5.0 is a modified version of the C4.5 decision tree I assumed that it would be a better fit than the C4.5.  I expect that the C5.0 model will give slightly better predictions than the C4.5 model. Luckily, there is a C5.0 library available for R so that makes my life much easier.  In their paper the researchers wrote:
+
+"We used AdaBoost with 10 iterations and configured the C4.5 tree for a confidence
+factor of 0.25. The overall recognition performance was of 99.4% (weighted average)
+using a 10-fold cross validation testing mode, with the following accuracies per class:
+"sitting" 100%, "sitting down" 96.9%, "standing" 99.8%, "standing up" 96.9%, and
+"walking" 99.8%." [see @har2012]
+
+
+##Pre-processing
+For the C5.0 decision tree I will need to filter the data by taking out all NA data including blank and divide by zero values.  Also, only pertinet data needs to be evaluated, which includes the accelerometer data only, so I am omittting the first 7 columns from the dataset for the purpose of the model.  
+
+```{r}
+training <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+testing <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+# Remve the NA columns from the datasets
+training <-training[,colSums(is.na(training)) == 0]
+testing <-testing[,colSums(is.na(testing)) == 0]
+# remove the columns not being used in the models
+training <-training[,-c(1:7)]
+testing <-testing[,-c(1:7)]
+```
+
+The C50 R library is available in CRAN so the library will need to installed and loaded before proceeding.  Simply fit the all of the predictors to the classe outcome and the C5.0 function does the rest (like magic).  I am attempting to match the number of boosting iterations that the researchers used with the trials=10 argument.  Predicting against the training data seems to have slighly better outcomes than the original paper concludes.  
+
+## Data Processing
+``` {r}
+set.seed(8888)
+fit.c50 <- C5.0(classe ~ ., data=training, trials=10)
+fit.c50
+prediction <- predict.C5.0(fit.c50, training)
+confusionMatrix(prediction, training$classe)
+predict(fit.c50, testing)
+```
+##Conclusion
+To my surprise, the C5.0 decision tree had almost 100% prediction for all classifications.  Since the C4.5 algorithm worked so well, I decided and assumed that the C5.0 algorithm would be slightly better (no need to re-invent the wheel here) but was suprised at how well the boosting and decision tree were able to predict the classification from the training data.  R and all of the machine learning libraries available make researching data and machine learning algorithms a snap.  
