@@ -1,0 +1,87 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "George Vu"
+date: "March 30, 2017"
+output: html_document
+bibliography: bib.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(caret)
+require(ggplot2)
+require(C50)
+```
+## Introduction
+In this article I am studying the HAR (Human Activity Recognition) data.  Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).  Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. [see @har2012]
+
+In their paper, the researchers decided to use a C4.5 decision tree with an AdaBoost method. The results were quite good at predicting the "classe"" variable.  In my research, I concluded that using a C5.0 decision tree model, which is a modified version of the C4.5 decision tree algorithm, I can get better predicitons on the training data than what the researchers were able to predict.  Since C5.0 is a modified version of the C4.5 decision tree I assumed that it would be a better fit than the C4.5.  I expect that the C5.0 model will give slightly better predictions than the C4.5 model. Luckily, there is a C5.0 library available for R so that makes my life much easier.  In their paper the researchers wrote:
+
+"We used AdaBoost with 10 iterations and configured the C4.5 tree for a confidence
+factor of 0.25. The overall recognition performance was of 99.4% (weighted average)
+using a 10-fold cross validation testing mode, with the following accuracies per class:
+"sitting" 100%, "sitting down" 96.9%, "standing" 99.8%, "standing up" 96.9%, and
+"walking" 99.8%." [see @har2012]
+
+
+##Pre-processing
+For the C5.0 decision tree I will need to filter the data by taking out all NA data including blank and divide by zero values.  Also, only pertinent data needs to be evaluated, which includes the accelerometer data only, so I am omittting the first 7 columns from the dataset for the purpose of the model. I will partition the data into training and testing using 70% of the data from the pml-training data for the training dataset and the rest for the testing dataset. 
+
+```{r}
+all_data <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+all_data <- all_data[,colSums(is.na(all_data)) == 0]
+all_data <- all_data[,-c(1:7)]
+# Remove the NA columns from the datasets
+inTrain <- createDataPartition(y = all_data$classe, p=0.75, list=FALSE)
+training <- all_data[inTrain, ]
+testing <- all_data[-inTrain, ]
+# remove the columns not being used in the models
+```
+
+## Data Processing
+The C50 R library is available in CRAN so the library will need to installed and loaded before proceeding.  Simply fit  all of the predictors to the classe outcome and the C5.0 function does the rest (like magic).  For the first fit I will use the C5.0 model with no parameters.   
+
+``` {r}
+seed <- 8888
+set.seed(seed)
+fit1 <- C5.0(classe ~ ., data=training)
+fit1
+prediction1 <- predict.C5.0(fit1, newdata = testing)
+confusionMatrix(prediction1, testing$classe)
+```
+
+For the next fit, I will use the same boosting and Confidence factor that the researchers cited in their paper.
+
+``` {r}
+set.seed(seed)
+fit2 <- C5.0(classe ~ ., data=training, trials = 10, control = C5.0Control(CF = .25))
+fit2
+prediction2 <- predict.C5.0(fit2, newdata = testing, trials=10)
+confusionMatrix(prediction2, testing$classe)
+```
+
+Next I would like to test the same model again but with double the boosting and adding parameters winnow=TRUE and fuzzyThreshold=TRUE for the control to compare the results.
+
+``` {r}
+set.seed(seed)
+fit3 <- C5.0(classe ~ ., data=training, trials=20, control = C5.0Control(CF = .25))
+fit3
+prediction3 <- predict.C5.0(fit3, newdata = testing, trials = 20)
+cm <- confusionMatrix(prediction3, testing$classe)
+ggplot(data = data.frame(cm$table), aes(x=Prediction, y=Reference, fill=Freq)) + 
+  geom_tile()+geom_text(aes(Prediction, Reference, label = Freq), color = "black", size = 6)
+```
+
+
+##Conclusion
+The C5.0 model seems to be on par with the C4.5 model and the results tend to agree with the original researchers prediction accuracies.  In fact, with the increased boosting and additional parameters in the last model the accuracies match almost exactly to the original researchers outcomes of 99.4%.  BY increasing the boosting trials in the models I was able to increase the accuracy of the predictions by few percentage points.  I assume with a bigger dataset and perhaps more boosting the accuracies will also increase. 
+
+R and all of the machine learning libraries available make researching data and machine learning algorithms a snap.  
+
+## Prediction on the testing data
+``` {r}
+har_testing_data <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+har_testing_data <- har_testing_data[,colSums(is.na(har_testing_data)) == 0]
+har_testing_data <- har_testing_data[,-c(1:7)]
+predict(fit3, har_testing_data)
+```
